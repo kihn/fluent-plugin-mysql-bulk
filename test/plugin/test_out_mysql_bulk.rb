@@ -49,6 +49,32 @@ class MysqlBulkOutputTest < Test::Unit::TestCase
         flush_interval 10s
       ]
     end
+    assert_raise(Fluent::ConfigError) do
+      d = create_driver %[
+        host localhost
+        username root
+        password hogehoge
+        connect_timeout "10"
+        column_names id,user_name,created_at,updated_at
+        table users
+        on_duplicate_key_update true
+        on_duplicate_update_keys user_name,updated_at
+        flush_interval 10s
+      ]
+    end
+    assert_raise(Fluent::ConfigError) do
+      d = create_driver %[
+        host localhost
+        username root
+        password hogehoge
+        connect_timeout nil
+        column_names id,user_name,created_at,updated_at
+        table users
+        on_duplicate_key_update true
+        on_duplicate_update_keys user_name,updated_at
+        flush_interval 10s
+      ]
+    end
   end
 
   def test_configure
@@ -94,6 +120,19 @@ class MysqlBulkOutputTest < Test::Unit::TestCase
         database test_app_development
         username root
         password hogehoge
+        column_names id,user_name,created_at,updated_at
+        key_names id,user,created_date,updated_date
+        table users
+        on_duplicate_key_update true
+        on_duplicate_update_keys user_name,updated_at
+      ]
+    end
+    assert_nothing_raised(Fluent::ConfigError) do
+      d = create_driver %[
+        database test_app_development
+        username root
+        password hogehoge
+        connect_timeout 10
         column_names id,user_name,created_at,updated_at
         key_names id,user,created_date,updated_date
         table users

@@ -8,6 +8,7 @@ module Fluent
     config_param :database, :string
     config_param :username, :string
     config_param :password, :string, default: ''
+    config_param :connect_timeout, :integer, default: 120 # mysql2 default
 
     config_param :column_names, :string
     config_param :key_names, :string, default: nil
@@ -46,6 +47,12 @@ module Fluent
 
       @column_names = @column_names.split(',')
       @key_names = @key_names.nil? ? @column_names : @key_names.split(',')
+
+      #mysql2 client arguments
+      @params = {host: @host, port: @port, username: @username,
+                 password: @password, database: @database,
+                 flags: Mysql2::Client::MULTI_STATEMENTS}
+      @params[:connect_timeout] = @connect_timeout unless @connect_timeout.nil?
     end
 
     def start
@@ -73,18 +80,10 @@ module Fluent
     end
 
     def client
-      Mysql2::Client.new(
-          host: @host,
-          port: @port,
-          username: @username,
-          password: @password,
-          database: @database,
-          flags: Mysql2::Client::MULTI_STATEMENTS
-        )
+      Mysql2::Client.new(@params)
     end
 
     def write(chunk)
-      @handler = client
       values_templates = []
       values = []
       chunk.msgpack_each do |tag, time, data|
@@ -94,9 +93,15 @@ module Fluent
       sql = "INSERT INTO #{@table} (#{@column_names.join(',')}) VALUES #{values_templates.join(',')}"
       sql += @on_duplicate_key_update_sql if @on_duplicate_key_update
 
-      $log.info "bulk insert values size => #{values_templates.size}"
-      @handler.xquery(sql, values)
-      @handler.close
+      begin
+        @handler = client
+        $log.info "bulk insert values size => #{values_templates.size}"
+        @handler.xquery(sql, values)
+      rescue => e
+        $log.error "bulk insert error: #{e.to_s}"
+      ensure
+        @handler.close
+      end
     end
 
     private
